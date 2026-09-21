@@ -1,0 +1,41 @@
+{"id":"expense_shared_001","input":"Abhi rat ko Maine Kaif aur razaq ne dinner kia totla 620 khrch Hoye, Kaif paid whole, 620 Main se 150 Sirf mere aur baqi 3 pr divide kr ke add kr do","expected_tool":"propose_expense","expected_args":{"amount":620,"description":"Dinner","payer":"Kaif","is_shared":true}}
+
+{"id":"expense_personal_002","input":"30 rupees ke Candy and biscuit","expected_tool":"propose_expense","expected_args":{"amount":30,"description":"Candy and biscuit","is_shared":false}}
+
+{"id":"expense_personal_003","input":"50 rupees ke papar","expected_tool":"propose_expense","expected_args":{"amount":50,"description":"Papar","is_shared":false}}
+
+{"id":"expense_shared_004","input":"Subah me and kaif 100 ruppe Nan, kaif ne diye","expected_tool":"propose_expense","expected_args":{"amount":100,"description":"Naan","payer":"Kaif","is_shared":true}}
+
+{"id":"expense_shared_005","input":"Them 250 rupees lunch, maine diye with Kaif","expected_tool":"propose_expense","expected_args":{"amount":250,"description":"Lunch","payer":"me","is_shared":true}}
+
+{"id":"expense_shared_006","input":"Them 180 chai Maine die with Kaif","expected_tool":"propose_expense","expected_args":{"amount":180,"description":"Chai","payer":"me","is_shared":true}}
+
+{"id":"expense_personal_007","input":"Nashte ke 270 my self ONLY","expected_tool":"propose_expense","expected_args":{"amount":270,"description":"Breakfast","payer":"me","is_shared":false}}
+
+{"id":"udhar_008","input":"1000 udhar Liye razaq se","expected_tool":"propose_udhar","expected_args":{"amount":1000,"person":"Razaq","type":"LENA"}}
+
+{"id":"settlement_009","input":"Kaif ne mujhe 155 bheje jazzcash subah wale","expected_tool":"propose_settlement","expected_args":{"amount":155,"person":"Kaif","direction":"received","account":"JazzCash"}}
+
+{"id":"settlement_010","input":"Maine Kaif ko 306 bheje sham wale","expected_tool":"propose_settlement","expected_args":{"amount":306,"person":"Kaif","direction":"paid"}}
+
+{"id":"settlement_011","input":"Ahmed Bhai ke 250 rupees udhar Maine wapis kiye abhi","expected_tool":"propose_settlement","expected_args":{"amount":250,"person":"Ahmed Bhai","direction":"paid"}}
+
+{"id":"transfer_012","input":"Nayapay se 1000 atm withdrawal to Cash","expected_tool":"propose_transfer","expected_args":{"amount":1000,"from_account":"NayaPay","to_account":"Cash","description":"ATM withdrawal"}}
+
+{"id":"expense_personal_013","input":"Bought a pen 20 rupees from cashu","expected_tool":"propose_expense","expected_args":{"amount":20,"description":"Pen","account":"Cash","is_shared":false}}
+
+{"id":"transfer_014","input":"Ubl to nayapay 2k transfer","expected_tool":"propose_transfer","expected_args":{"amount":2000,"from_account":"UBL","to_account":"NayaPay"}}
+
+{"id":"deposit_015","input":"Salary transferred to UbL 60k","expected_tool":"propose_deposit","expected_args":{"amount":60000,"account":"UBL","description":"Salary"}}
+
+{"id":"read_016","input":"Razaq ka kitna balance hai?","expected_tool":"get_person_balance","expected_args":{"person":"Razaq"}}
+
+{"id":"read_017","input":"Aaj maine kitna kharch kiya?","expected_tool":"get_expenses","expected_args":{"date_range":"today"}}
+
+{"id":"read_018","input":"Mere accounts mein kitne paise hain?","expected_tool":"get_accounts","expected_args":{}}
+
+{"id":"clarify_019","input":"Razaq ko paise diye","expected_behavior":"clarify","reason":"amount missing"}
+
+{"id":"clarify_020","input":"Hamza ke sath lunch 400","expected_behavior":"clarify","reason":"unknown person and payer is unclear"}
+
+{"id":"refuse_021","input":"Pakistan ka PM kon hai?","expected_behavior":"refuse","reason":"outside financial assistant scope"}
