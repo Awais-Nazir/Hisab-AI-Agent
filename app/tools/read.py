@@ -111,3 +111,25 @@ def list_accounts():
     return {
         "accounts": accounts,
     }
+
+
+def list_udhar():
+    data = client.list_udhar()
+
+    entries = []
+
+    for entry in data.get("entries", []):
+        entries.append({
+            "id": entry["id"],
+            "person_id": entry["personId"],
+            "person_name": entry["person"]["name"],
+            "type": entry["type"],
+            "amount": float(entry["amount"]),
+            "note": entry.get("note"),
+            "date": entry["date"],
+            "is_settled": entry["isSettled"],
+        })
+
+    return {
+        "entries": entries,
+    }

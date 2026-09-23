@@ -70,5 +70,12 @@ class HisabClient:
 
         return response.json()
 
+    def list_udhar(self):
+        response = self.client.get("/udhar")
+
+        response.raise_for_status()
+
+        return response.json()
+
     def close(self):
         self.client.close()

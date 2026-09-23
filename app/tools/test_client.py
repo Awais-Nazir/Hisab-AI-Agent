@@ -18,8 +18,10 @@ try:
     # balance = client.list_contact_balance(people.get("people")[0]["id"])
     categories = client.list_categories()
     accounts = client.list_accounts()
-    print(categories)
-    print(accounts)
+    udhar = client.list_udhar()
+    print(udhar)
+    # print(categories)
+    # print(accounts)
 
 finally:
     client.close()

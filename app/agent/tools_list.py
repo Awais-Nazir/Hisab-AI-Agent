@@ -36,10 +36,12 @@ tools = [
         "function": {
             "name": "get_contact_balance",
             "description": (
-                "Get the current balance between the user and a specific contact. "
-                "Use this when the user asks how much they owe a contact or how much "
-                "a contact owes them. You must first use list_contacts to find the "
-                "contact ID if you do not already have it."
+                "Get the shared-expense balance between the user and a specific contact. "
+                "This balance comes from shared expenses and settlements, NOT udhar entries. "
+                "Use this when the user asks how much they owe someone or how much someone "
+                "owes them from shared expenses. Do NOT use this for questions explicitly "
+                "about udhar, lena, dena, or udhar entries. "
+                "You must first use list_contacts to find the contact ID if you do not already have it."
             ),
             "parameters": {
                 "type": "object",
@@ -49,7 +51,7 @@ tools = [
                         "description": "The contact ID returned by list_contacts.",
                     }
                 },
-                "required": ["contact_id", "contact_name"],
+                "required": ["contact_id"],
                 "additionalProperties": False,
             },
         },
@@ -80,6 +82,27 @@ tools = [
                 "including asking for an account's ID, name, type, or balance. "
                 "Use it to resolve an account name such as 'Bank Account', "
                 "'Cash', 'NayaPay', or 'SadaPay' to its ID."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_udhar",
+            "description": (
+                "Get the user's udhar entries. "
+                "Use this for questions about udhar, lena, dena, loans, or money "
+                "owed outside the shared-expense balance. "
+                "If the user mentions a person's name, use the returned person_name "
+                "and type to find that person's udhar. "
+                "LENA means the user has given money and should receive it back. "
+                "DENA means the user owes money to that person. "
+                "Do NOT use get_contact_balance for explicit udhar questions."
             ),
             "parameters": {
                 "type": "object",

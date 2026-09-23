@@ -8,10 +8,13 @@ from ..tools.read import (
     get_contact_balance,
     list_categories,
     list_accounts,
+    list_udhar,
 )
 
 import json
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 load_dotenv()
@@ -26,72 +29,153 @@ TOOL_REGISTRY = {
     "get_contact_balance": get_contact_balance,
     "list_categories": list_categories,
     "list_accounts": list_accounts,
+    "list_udhar": list_udhar,
 }
 
 SYSTEM_PROMPT = """You are the Hisab Kitab assistant. You help the user with their own
 expenses, balances, contacts and accounts. All amounts are in PKR.
 
 Current date/time: {now} (Asia/Karachi). Use it to resolve "aaj", "kal", "is hafte".
+
 Reply in the language the user writes in (Roman Urdu, Urdu or English).
+
 Only answer about the user's Hisab Kitab data. For anything else, say briefly that
 you can only help with their expenses, balances and accounts.
+
 Never state a number that did not come from a tool result. If a name is unclear, ask.
-Definitions: your_share = what an expense cost the user; you_paid = cash the user
-paid out; amount = the full bill."""
+
+Definitions:
+- your_share = what an expense cost the user
+- you_paid = cash the user paid out
+- amount = the full bill
+  
+Udhar vs shared-expense balance:
+- Shared-expense balance and udhar are separate concepts.
+- get_contact_balance is only for shared-expense balances.
+- list_udhar is for actual udhar entries.
+- If the user explicitly says "udhar", "lena", or "dena" in an udhar context, use list_udhar.
+- LENA means the user should receive money from that person.
+- DENA means the user owes money to that person.
+
+Account rules:
+- When creating an expense, udhar entry, or settlement, never assume which account was used.
+- If the user does not name an account for one of these actions, use list_accounts and ask them to choose.
+
+Payment rules:
+- If a person has both a shared-expense balance and an open udhar entry,
+  ask which one the payment is settling.
+
+"""
 
 
-messages = [
-    {
+def run_agent(user_message: str, history: list | None = None) -> dict:
+    """
+    Run the Hisab Kitab agent for one user message.
+
+    Args:
+        user_message: The new message from the user.
+        history: Previous conversation messages.
+
+    Returns:
+        {
+            "reply": str,
+            "tool_calls": list,
+            "messages": list
+        }
+    """
+
+    history = history or []
+
+    now = datetime.now(ZoneInfo("Asia/Karachi"))
+
+    system_message = {
         "role": "system",
-        "content": SYSTEM_PROMPT,
-    },
-    {
-        "role": "user",
-        "content": "Hamza ka balance batao",
-    },
-]
+        "content": SYSTEM_PROMPT.format(now=now.strftime("%Y-%m-%d %H:%M:%S")),
+    }
 
+    messages = [
+        system_message,
+        *history,
+        {
+            "role": "user",
+            "content": user_message,
+        },
+    ]
 
-print("\n=== USER ===")
-print(messages[0]["content"])
+    tool_calls = []
 
+    for _ in range(MAX_STEPS):
+        completion = client.chat.completions.create(
+            model=os.getenv("MODEL"),
+            messages=messages,
+            tools=tools,
+        )
 
-for step in range(MAX_STEPS):
-    print(f"\n=== STEP {step + 1} ===")
+        message = completion.choices[0].message
 
-    completion = client.chat.completions.create(
-        model=os.getenv("MODEL"),
-        messages=messages,
-        tools=tools,
-    )
+        messages.append(message)
 
-    message = completion.choices[0].message
+        if not message.tool_calls:
+            return {
+                "reply": message.content or "",
+                "tool_calls": tool_calls,
+                "messages": messages,
+            }
 
-    print("\nMODEL RESPONSE:")
-    print(message)
+        for tool_call in message.tool_calls:
+            tool_name = tool_call.function.name
+            raw_arguments = tool_call.function.arguments
 
-    # Add model response to conversation
-    messages.append(message)
+            try:
+                parsed_args = json.loads(raw_arguments)
 
-    # No tool calls = model is done
-    if not message.tool_calls:
-        print("\nFINAL ANSWER:")
-        print(message.content)
-        break
+            except json.JSONDecodeError:
+                result = {"error": "Invalid JSON arguments provided by the model."}
 
-    # Execute requested tools
-    for tool_call in message.tool_calls:
-        tool_name = tool_call.function.name
-        raw_arguments = tool_call.function.arguments
+                tool_calls.append({
+                    "name": tool_name,
+                    "arguments": raw_arguments,
+                    "result": result,
+                })
 
-        print("\nTOOL REQUEST:")
-        print("Name:", tool_name)
-        print("Arguments:", raw_arguments)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result),
+                })
 
-        try:
-            parsed_args = json.loads(raw_arguments)
-        except json.JSONDecodeError:
-            result = {"error": "Invalid JSON arguments provided by the model."}
+                continue
+
+            tool_function = TOOL_REGISTRY.get(tool_name)
+
+            if not tool_function:
+                result = {"error": f"Unknown tool: {tool_name}"}
+
+                tool_calls.append({
+                    "name": tool_name,
+                    "arguments": parsed_args,
+                    "result": result,
+                })
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result),
+                })
+
+                continue
+
+            try:
+                result = tool_function(**parsed_args)
+
+            except Exception as e:
+                result = {"error": f"Tool '{tool_name}' failed: {str(e)}"}
+
+            tool_calls.append({
+                "name": tool_name,
+                "arguments": parsed_args,
+                "result": result,
+            })
 
             messages.append({
                 "role": "tool",
@@ -99,35 +183,15 @@ for step in range(MAX_STEPS):
                 "content": json.dumps(result),
             })
 
-            continue
+    return {
+        "reply": (
+            "I couldn't complete the request because the maximum "
+            "number of tool steps was reached."
+        ),
+        "tool_calls": tool_calls,
+        "messages": messages,
+    }
 
-        tool_function = TOOL_REGISTRY.get(tool_name)
 
-        if not tool_function:
-            result = {"error": f"Unknown tool: {tool_name}"}
-
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": json.dumps(result),
-            })
-
-            continue
-
-        try:
-            result = tool_function(**parsed_args)
-
-        except Exception as e:
-            result = {"error": f"Tool '{tool_name}' failed: {str(e)}"}
-
-        print("\nTOOL RESULT:")
-        print(result)
-
-        messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call.id,
-            "content": json.dumps(result),
-        })
-
-else:
-    print("\nERROR: Maximum tool steps reached.")
+result = run_agent(user_message="Kaif se maine kitne lene hain? Udhar?")
+print(result)
