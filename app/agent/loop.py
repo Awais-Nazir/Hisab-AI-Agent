@@ -9,7 +9,6 @@ from ..tools.write import (
     propose_expense,
     propose_settlement,
     propose_udhar_settle,
-    confirm_action,
 )
 from ..tools.read import (
     list_expenses,
@@ -43,7 +42,6 @@ TOOL_REGISTRY = {
     "propose_expense": propose_expense,
     "propose_settlement": propose_settlement,
     "propose_udhar_settle": propose_udhar_settle,
-    "confirm_action": confirm_action,
 }
 
 SYSTEM_PROMPT = """You are the Hisab Kitab assistant. You help the user with their own
@@ -98,7 +96,9 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
         }
     """
 
-    history = history or []
+    history = [
+        m for m in (history or []) if isinstance(m, dict) and m.get("role") != "system"
+    ]
 
     hisab_client = HisabClient()
     hisab_client.login()
@@ -183,13 +183,7 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
                 continue
 
             try:
-                if tool_name == "confirm_action":
-                    result = confirm_action(
-                        action_id=parsed_args["action_id"],
-                        client=hisab_client,
-                    )
-                else:
-                    result = tool_function(**parsed_args)
+                result = tool_function(**parsed_args)
 
             except Exception as e:
                 result = {"error": f"Tool '{tool_name}' failed: {str(e)}"}

@@ -353,21 +353,4 @@ tools = [
             },
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "confirm_action",
-            "description": "Confirm a previously proposed write action using its action_id.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "action_id": {
-                        "type": "string",
-                        "description": "The action_id returned by a previous proposal.",
-                    }
-                },
-                "required": ["action_id"],
-            },
-        },
-    },
 ]

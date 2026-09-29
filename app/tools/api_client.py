@@ -123,9 +123,6 @@ class HisabClient:
 
         return response.json()
 
-    def write_settlements(self, SettlementProposal):
-        pass
-
     def write_udhar(
         self,
         type: str,

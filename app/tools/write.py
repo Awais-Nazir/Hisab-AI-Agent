@@ -136,39 +136,6 @@ def propose_udhar_settle(
     }
 
 
-# def confirm_action(action_id: str, client):
-#     action = pending_actions.get(action_id)
-
-#     if not action:
-#         raise ValueError("Action not found or already completed.")
-
-#     if action["type"] != "expense":
-#         raise ValueError(f"Unsupported action type: {action['type']}")
-
-#     proposal = action["proposal"]
-
-#     category_name = client.get_category_name(proposal["category_id"])
-
-#     result = client.write_expense(
-#         amount=proposal["amount"],
-#         description=proposal["description"],
-#         category=category_name,
-#         account_id=proposal["account_id"],
-#         is_personal=proposal["is_personal"],
-#         payments=proposal["payments"],
-#         splits=proposal["splits"],
-#     )
-
-#     # Remove the proposal only after the API call succeeds.
-#     del pending_actions[action_id]
-
-#     return {
-#         "action_id": action_id,
-#         "status": "confirmed",
-#         "result": result,
-#     }
-
-
 def confirm_action(action_id: str, client):
     action = pending_actions.get(action_id)
 
@@ -213,10 +180,11 @@ def confirm_action(action_id: str, client):
             account_id=proposal["account_id"],
             note=proposal["note"],
         )
+
     else:
         raise ValueError(f"Unsupported action type: {action['type']}")
 
-    # Remove the proposal only after the API call succeeds.
+    # Remove only after the real API operation succeeds.
     del pending_actions[action_id]
 
     return {
@@ -224,4 +192,19 @@ def confirm_action(action_id: str, client):
         "status": "confirmed",
         "type": action["type"],
         "result": result,
+    }
+
+
+def reject_action(action_id: str):
+    action = pending_actions.get(action_id)
+
+    if not action:
+        raise ValueError("Action not found or already completed.")
+
+    del pending_actions[action_id]
+
+    return {
+        "action_id": action_id,
+        "status": "rejected",
+        "type": action["type"],
     }
