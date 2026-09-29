@@ -1,7 +1,16 @@
 from openai import OpenAI
 from dotenv import load_dotenv
 
+from app.tools.api_client import HisabClient
+
 from .tools_list import tools
+from ..tools.write import (
+    propose_udhar,
+    propose_expense,
+    propose_settlement,
+    propose_udhar_settle,
+    confirm_action,
+)
 from ..tools.read import (
     list_expenses,
     list_contacts,
@@ -30,6 +39,11 @@ TOOL_REGISTRY = {
     "list_categories": list_categories,
     "list_accounts": list_accounts,
     "list_udhar": list_udhar,
+    "propose_udhar": propose_udhar,
+    "propose_expense": propose_expense,
+    "propose_settlement": propose_settlement,
+    "propose_udhar_settle": propose_udhar_settle,
+    "confirm_action": confirm_action,
 }
 
 SYSTEM_PROMPT = """You are the Hisab Kitab assistant. You help the user with their own
@@ -85,6 +99,9 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
     """
 
     history = history or []
+
+    hisab_client = HisabClient()
+    hisab_client.login()
 
     now = datetime.now(ZoneInfo("Asia/Karachi"))
 
@@ -166,7 +183,13 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
                 continue
 
             try:
-                result = tool_function(**parsed_args)
+                if tool_name == "confirm_action":
+                    result = confirm_action(
+                        action_id=parsed_args["action_id"],
+                        client=hisab_client,
+                    )
+                else:
+                    result = tool_function(**parsed_args)
 
             except Exception as e:
                 result = {"error": f"Tool '{tool_name}' failed: {str(e)}"}
@@ -193,5 +216,25 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
     }
 
 
-result = run_agent(user_message="Kaif se maine kitne lene hain? Udhar?")
-print(result)
+# result = run_agent(
+#     # "Maine Kaif ko 5000 PKR udhar diye hain. NayaPay se. Note mein 'Lunch ke liye' likh do."
+#     "Maine NayaPay se 250 PKR ka breakfast kiya hai. Category Breakfast hai."
+#     # "Kaif ka 20,000 wala udhar settle kar do"
+# )
+
+# print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+
+first = run_agent(
+    "kaif ne mujhe 3000 jo cash advnace lia tha wapis kr dia nayapay main, settle kr do."
+)
+
+print("=== FIRST ===")
+print(json.dumps(first, indent=2, ensure_ascii=False, default=str))
+
+second = run_agent(
+    "haan, confirm kar do",
+    history=first["messages"],
+)
+
+print("\n=== SECOND ===")
+print(json.dumps(second, indent=2, ensure_ascii=False, default=str))

@@ -77,5 +77,140 @@ class HisabClient:
 
         return response.json()
 
+    def get_category_name(self, category_id: str):
+        data = self.list_categories()
+
+        for category in data["categories"]:
+            if category["id"] == category_id:
+                return category["name"]
+
+        raise ValueError(f"Category not found: {category_id}")
+
+    def write_expense(
+        self,
+        amount: float,
+        description: str,
+        category: str,
+        account_id: str,
+        is_personal: bool,
+        payments: list[dict] | None = None,
+        splits: list[dict] | None = None,
+    ):
+        payload = {
+            "amount": amount,
+            "description": description,
+            "category": category,
+            "accountId": account_id,
+            "isShared": not is_personal,
+        }
+
+        if not is_personal:
+            payload["payments"] = payments or []
+            payload["splits"] = splits or []
+
+        print("PAYLOAD:", payload)  # temporary
+
+        response = self.client.post(
+            "/expenses",
+            json=payload,
+        )
+
+        if response.status_code >= 400:
+            print("STATUS:", response.status_code)
+            print("RESPONSE:", response.text)
+
+        response.raise_for_status()
+
+        return response.json()
+
+    def write_settlements(self, SettlementProposal):
+        pass
+
+    def write_udhar(
+        self,
+        type: str,
+        person_id: str,
+        amount: float,
+        account_id: str,
+        note: str | None = None,
+    ):
+        payload = {
+            "type": type,
+            "personId": person_id,
+            "amount": amount,
+            "accountId": account_id,
+        }
+
+        if note:
+            payload["note"] = note
+
+        print("PAYLOAD:", payload)  # temporary
+
+        response = self.client.post("/udhar", json=payload)
+
+        if response.status_code >= 400:
+            print("STATUS:", response.status_code)
+            print("RESPONSE:", response.text)
+
+        response.raise_for_status()
+
+        return response.json()
+
+    def settle_udhar(
+        self,
+        udhar_id: str,
+        account_id: str,
+    ):
+        payload = {
+            "accountId": account_id,
+        }
+
+        print("PAYLOAD", payload)
+
+        response = self.client.post(
+            f"/udhar/{udhar_id}/settle",
+            json=payload,
+        )
+
+        if response.status_code >= 400:
+            print("STATUS:", response.status_code)
+            print("RESPONSE:", response.text)
+
+        response.raise_for_status()
+
+        return response.json()
+
+    def write_global_settlement(
+        self,
+        from_person_id: str,
+        to_person_id: str,
+        amount: float,
+        account_id: str | None = None,
+        note: str | None = None,
+    ):
+        payload = {
+            "fromPersonId": from_person_id,
+            "toPersonId": to_person_id,
+            "amount": amount,
+        }
+
+        if account_id:
+            payload["accountId"] = account_id
+
+        if note:
+            payload["note"] = note
+
+        print("PAYLOAD", payload)
+
+        response = self.client.post("/settlements/global", json=payload)
+
+        if response.status_code >= 400:
+            print("STATUS:", response.status_code)
+            print("RESPONSE:", response.text)
+
+        response.raise_for_status()
+
+        return response.json()
+
     def close(self):
         self.client.close()
