@@ -113,11 +113,13 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
     messages = [
         system_message,
         *history,
-        {
-            "role": "user",
-            "content": user_message,
-        },
     ]
+
+    new_messages_start = len(messages)
+    messages.append({
+        "role": "user",
+        "content": user_message,
+    })
 
     tool_calls = []
 
@@ -129,14 +131,16 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
         )
 
         message = completion.choices[0].message
+        message_dict = message.model_dump(exclude_none=True)
 
-        messages.append(message)
+        messages.append(message_dict)
 
         if not message.tool_calls:
             return {
                 "reply": message.content or "",
                 "tool_calls": tool_calls,
                 "messages": messages,
+                "new_messages_start": new_messages_start,
             }
 
         for tool_call in message.tool_calls:
@@ -207,6 +211,7 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
         ),
         "tool_calls": tool_calls,
         "messages": messages,
+        "new_messages_start": new_messages_start,
     }
 
 
@@ -217,18 +222,18 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
 # )
 
 # print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+if __name__ == "__main__":
+    first = run_agent(
+        "kaif ne mujhe 3000 jo cash advnace lia tha wapis kr dia nayapay main, settle kr do."
+    )
 
-first = run_agent(
-    "kaif ne mujhe 3000 jo cash advnace lia tha wapis kr dia nayapay main, settle kr do."
-)
+    print("=== FIRST ===")
+    print(json.dumps(first, indent=2, ensure_ascii=False, default=str))
 
-print("=== FIRST ===")
-print(json.dumps(first, indent=2, ensure_ascii=False, default=str))
+    second = run_agent(
+        "haan, confirm kar do",
+        history=first["messages"],
+    )
 
-second = run_agent(
-    "haan, confirm kar do",
-    history=first["messages"],
-)
-
-print("\n=== SECOND ===")
-print(json.dumps(second, indent=2, ensure_ascii=False, default=str))
+    print("\n=== SECOND ===")
+    print(json.dumps(second, indent=2, ensure_ascii=False, default=str))

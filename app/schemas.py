@@ -52,3 +52,21 @@ class UdharProposal(BaseModel):
 class UdharSettleProposal(BaseModel):
     udhar_id: str
     account_id: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str | None = None
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    reply: str
+    pending_action: dict | None = None
+
+
+class ActionResponse(BaseModel):
+    action_id: str
+    status: str
+    type: str
+    result: dict | None = None
