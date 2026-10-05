@@ -1,9 +1,16 @@
+import re
+
 from fastapi import FastAPI, HTTPException
 
 from app.tools.api_client import HisabClient
 
 from .db.database import SessionLocal
-from .db.messages import get_session_messages, messages_to_history, save_agent_messages
+from .db.messages import (
+    create_message,
+    get_session_messages,
+    messages_to_history,
+    save_agent_messages,
+)
 from .db.sessions import create_session, get_session
 from .agent.loop import run_agent
 from .schemas import ChatRequest, ChatResponse
@@ -12,6 +19,87 @@ from .tools.write import confirm_action, reject_action
 from .schemas import ActionResponse
 
 app = FastAPI(title="Hisab Agent")
+
+
+CONFIRM_REPLIES = {
+    "yes",
+    "y",
+    "haan",
+    "han",
+    "ha",
+    "ok",
+    "okay",
+    "confirm",
+    "confirmed",
+    "sure",
+}
+
+REJECT_REPLIES = {
+    "no",
+    "n",
+    "nahin",
+    "nahi",
+    "na",
+    "cancel",
+    "reject",
+    "rejected",
+}
+
+CONFIRM_PHRASES = (
+    "confirm kar do",
+    "kar do",
+    "kardo",
+    "kr do",
+    "yes confirm",
+    "haan confirm",
+    "han confirm",
+    "ok confirm",
+)
+
+REJECT_PHRASES = (
+    "cancel kar do",
+    "reject kar do",
+    "mat karo",
+    "mat karna",
+    "rehne do",
+    "rhne do",
+    "nahi karna",
+    "nahin karna",
+)
+
+
+def classify_pending_action_reply(message: str) -> str | None:
+    normalized = re.sub(r"[^a-z0-9\s]", " ", message.lower())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+
+    if not normalized:
+        return None
+
+    if normalized in REJECT_REPLIES:
+        return "reject"
+
+    if any(phrase in normalized for phrase in REJECT_PHRASES):
+        return "reject"
+
+    if normalized in CONFIRM_REPLIES:
+        return "confirm"
+
+    if any(phrase in normalized for phrase in CONFIRM_PHRASES):
+        return "confirm"
+
+    return None
+
+
+def pending_action_response(action):
+    if not action:
+        return None
+
+    return {
+        "action_id": action.id,
+        "type": action.type,
+        "status": action.status,
+        "proposal": action.proposal,
+    }
 
 
 @app.get("/")
@@ -56,10 +144,98 @@ def chat(request: ChatRequest):
             session_id=session.id,
         )
 
-        print(
-            "PENDING ACTION:",
-            pending_action.id if pending_action else None,
-        )
+        if pending_action:
+            pending_reply = classify_pending_action_reply(request.message)
+
+            if pending_reply == "confirm":
+                hisab_client = HisabClient()
+
+                try:
+                    hisab_client.login()
+
+                    confirm_action(
+                        db=db,
+                        action_id=pending_action.id,
+                        session_id=session.id,
+                        client=hisab_client,
+                    )
+
+                finally:
+                    hisab_client.close()
+
+                reply = "Done, I confirmed that action."
+
+                create_message(
+                    db=db,
+                    session_id=session.id,
+                    role="user",
+                    content=request.message,
+                )
+                create_message(
+                    db=db,
+                    session_id=session.id,
+                    role="assistant",
+                    content=reply,
+                )
+
+                return ChatResponse(
+                    session_id=session.id,
+                    reply=reply,
+                    pending_action=None,
+                )
+
+            if pending_reply == "reject":
+                reject_action(
+                    db=db,
+                    action_id=pending_action.id,
+                    session_id=session.id,
+                )
+
+                reply = "Okay, I rejected that action."
+
+                create_message(
+                    db=db,
+                    session_id=session.id,
+                    role="user",
+                    content=request.message,
+                )
+                create_message(
+                    db=db,
+                    session_id=session.id,
+                    role="assistant",
+                    content=reply,
+                )
+
+                return ChatResponse(
+                    session_id=session.id,
+                    reply=reply,
+                    pending_action=None,
+                )
+
+            reply = (
+                "You already have a pending action. "
+                "Please confirm or reject it first."
+            )
+
+            create_message(
+                db=db,
+                session_id=session.id,
+                role="user",
+                content=request.message,
+            )
+            create_message(
+                db=db,
+                session_id=session.id,
+                role="assistant",
+                content=reply,
+            )
+
+            return ChatResponse(
+                session_id=session.id,
+                reply=reply,
+                pending_action=pending_action_response(pending_action),
+            )
+
         # 3. Run the agent.
         result = run_agent(
             user_message=request.message,
@@ -94,14 +270,7 @@ def chat(request: ChatRequest):
         return ChatResponse(
             session_id=session.id,
             reply=result["reply"],
-            pending_action={
-                "action_id": pending_action.id,
-                "type": pending_action.type,
-                "status": pending_action.status,
-                "proposal": pending_action.proposal,
-            }
-            if pending_action
-            else None,
+            pending_action=pending_action_response(pending_action),
         )
 
     finally:
