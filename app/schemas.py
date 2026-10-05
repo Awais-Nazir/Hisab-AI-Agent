@@ -1,16 +1,39 @@
 from typing import Literal
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
+
+
+MAX_AMOUNT_PKR = 10_000_0
+
+
+def validate_amount(value: float) -> float:
+    if value <= 0:
+        raise ValueError("amount must be greater than 0")
+
+    if value >= MAX_AMOUNT_PKR:
+        raise ValueError(f"amount must be less than {MAX_AMOUNT_PKR} PKR")
+
+    return value
 
 
 class ExpensePayment(BaseModel):
     person_id: str
     amount: float
 
+    @field_validator("amount")
+    @classmethod
+    def check_amount(cls, value):
+        return validate_amount(value)
+
 
 class ExpenseSplit(BaseModel):
     person_id: str
     amount: float
+
+    @field_validator("amount")
+    @classmethod
+    def check_amount(cls, value):
+        return validate_amount(value)
 
 
 class ExpenseProposal(BaseModel):
@@ -21,6 +44,11 @@ class ExpenseProposal(BaseModel):
     is_personal: bool
     payments: list[ExpensePayment]
     splits: list[ExpenseSplit] = []
+
+    @field_validator("amount")
+    @classmethod
+    def check_amount(cls, value):
+        return validate_amount(value)
 
     @model_validator(mode="after")
     def check_sums(self):
@@ -43,6 +71,11 @@ class SettlementProposal(BaseModel):
     account_id: str | None = None
     note: str | None = None
 
+    @field_validator("amount")
+    @classmethod
+    def check_amount(cls, value):
+        return validate_amount(value)
+
 
 class UdharProposal(BaseModel):
     type: Literal["LENA", "DENA"]
@@ -50,6 +83,11 @@ class UdharProposal(BaseModel):
     amount: float
     account_id: str
     note: str | None = None
+
+    @field_validator("amount")
+    @classmethod
+    def check_amount(cls, value):
+        return validate_amount(value)
 
 
 class UdharSettleProposal(BaseModel):

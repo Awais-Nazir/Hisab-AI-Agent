@@ -1,6 +1,7 @@
+import os
 import re
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 
 from app.tools.api_client import HisabClient
 
@@ -13,12 +14,15 @@ from .db.messages import (
 )
 from .db.sessions import create_session, get_session
 from .agent.loop import run_agent
+from .run_logs import log_chat_run
 from .schemas import ChatRequest, ChatResponse
 from .db.actions import create_pending_action, get_pending_action_for_session
 from .tools.write import confirm_action, reject_action
 from .schemas import ActionResponse
 
 app = FastAPI(title="Hisab Agent")
+
+AGENT_SECRET = os.getenv("AGENT_SECRET")
 
 
 CONFIRM_REPLIES = {
@@ -102,6 +106,32 @@ def pending_action_response(action):
     }
 
 
+def require_agent_secret(
+    x_agent_secret: str | None = Header(default=None, alias="X-Agent-Secret"),
+):
+    if not AGENT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="AGENT_SECRET is not configured.",
+        )
+
+    if x_agent_secret != AGENT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid X-Agent-Secret.",
+        )
+
+
+def tool_log_entries(tool_calls: list[dict]) -> list[dict]:
+    return [
+        {
+            "name": tool_call.get("name"),
+            "arguments": tool_call.get("arguments"),
+        }
+        for tool_call in tool_calls
+    ]
+
+
 @app.get("/")
 def test():
     return {
@@ -115,7 +145,11 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post(
+    "/chat",
+    response_model=ChatResponse,
+    dependencies=[Depends(require_agent_secret)],
+)
 def chat(request: ChatRequest):
     db = SessionLocal()
 
@@ -177,6 +211,17 @@ def chat(request: ChatRequest):
                     role="assistant",
                     content=reply,
                 )
+                log_chat_run(
+                    session_id=session.id,
+                    user_message=request.message,
+                    tools_called=[
+                        {
+                            "name": "confirm_action",
+                            "arguments": {"action_id": pending_action.id},
+                        }
+                    ],
+                    final_reply=reply,
+                )
 
                 return ChatResponse(
                     session_id=session.id,
@@ -205,6 +250,17 @@ def chat(request: ChatRequest):
                     role="assistant",
                     content=reply,
                 )
+                log_chat_run(
+                    session_id=session.id,
+                    user_message=request.message,
+                    tools_called=[
+                        {
+                            "name": "reject_action",
+                            "arguments": {"action_id": pending_action.id},
+                        }
+                    ],
+                    final_reply=reply,
+                )
 
                 return ChatResponse(
                     session_id=session.id,
@@ -228,6 +284,12 @@ def chat(request: ChatRequest):
                 session_id=session.id,
                 role="assistant",
                 content=reply,
+            )
+            log_chat_run(
+                session_id=session.id,
+                user_message=request.message,
+                tools_called=[],
+                final_reply=reply,
             )
 
             return ChatResponse(
@@ -265,6 +327,12 @@ def chat(request: ChatRequest):
             messages=result["messages"],
             start_index=result["new_messages_start"],
         )
+        log_chat_run(
+            session_id=session.id,
+            user_message=request.message,
+            tools_called=tool_log_entries(result["tool_calls"]),
+            final_reply=result["reply"],
+        )
 
         # 5. Return the response.
         return ChatResponse(
@@ -280,6 +348,7 @@ def chat(request: ChatRequest):
 @app.post(
     "/actions/{action_id}/confirm",
     response_model=ActionResponse,
+    dependencies=[Depends(require_agent_secret)],
 )
 def confirm_pending_action(
     action_id: str,
@@ -296,6 +365,17 @@ def confirm_pending_action(
             action_id=action_id,
             session_id=session_id,
             client=hisab_client,
+        )
+        log_chat_run(
+            session_id=session_id,
+            user_message="[confirm endpoint]",
+            tools_called=[
+                {
+                    "name": "confirm_action",
+                    "arguments": {"action_id": action_id},
+                }
+            ],
+            final_reply="Action confirmed via endpoint.",
         )
 
         return ActionResponse(
@@ -318,6 +398,7 @@ def confirm_pending_action(
 @app.post(
     "/actions/{action_id}/reject",
     response_model=ActionResponse,
+    dependencies=[Depends(require_agent_secret)],
 )
 def reject_pending_action(
     action_id: str,
@@ -330,6 +411,17 @@ def reject_pending_action(
             db=db,
             action_id=action_id,
             session_id=session_id,
+        )
+        log_chat_run(
+            session_id=session_id,
+            user_message="[reject endpoint]",
+            tools_called=[
+                {
+                    "name": "reject_action",
+                    "arguments": {"action_id": action_id},
+                }
+            ],
+            final_reply="Action rejected via endpoint.",
         )
 
         return ActionResponse(

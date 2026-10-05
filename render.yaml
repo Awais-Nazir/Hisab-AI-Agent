@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: hisab-ai-agent
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MODEL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: AGENT_SECRET
+        sync: false
+      - key: API_BASE_URL
+        sync: false
+      - key: EMAIL
+        sync: false
+      - key: PASS
+        sync: false
