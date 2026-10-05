@@ -27,6 +27,9 @@ class ExpenseProposal(BaseModel):
         if abs(sum(p.amount for p in self.payments) - self.amount) > 0.01:
             raise ValueError("payments must sum to amount")
 
+        if not self.is_personal and not self.splits:
+            raise ValueError("shared expenses must include splits")
+
         if self.splits and abs(sum(s.amount for s in self.splits) - self.amount) > 0.01:
             raise ValueError("splits must sum to amount")
 

@@ -9,9 +9,9 @@
 {"id":"settlement_009","category":"settlement","input":"Kaif ne mujhe JazzCash par 155 PKR bheje shared balance settle kar do.","expected_tool":"propose_settlement","expected_args":{"amount":155}}
 {"id":"settlement_010","category":"settlement","input":"Maine Kaif ko NayaPay se 306 PKR bheje shared balance settle kar do.","expected_tool":"propose_settlement","expected_args":{"amount":306}}
 {"id":"settlement_011","category":"settlement","input":"Razaq ne mujhe Cash mein 400 PKR diye shared expense settlement ke liye.","expected_tool":"propose_settlement","expected_args":{"amount":400}}
-{"id":"settlement_012","category":"settlement","input":"Maine Ahmed Bhai ko Cash se 250 PKR shared balance ke liye diye.","expected_tool":"propose_settlement","expected_args":{"amount":250}}
+{"id":"settlement_012","category":"settlement","input":"Maine Kaif ko Cash se 250 PKR shared balance ke liye diye.","expected_tool":"propose_settlement","expected_args":{"amount":250}}
 {"id":"udhar_013","category":"udhar","input":"Maine Razaq ko NayaPay se 1000 PKR udhar diye. Note fuel.","expected_tool":"propose_udhar","expected_args":{"amount":1000,"type":"LENA"}}
-{"id":"udhar_014","category":"udhar","input":"Maine Ahmed Bhai se Cash mein 250 PKR udhar liye.","expected_tool":"propose_udhar","expected_args":{"amount":250,"type":"DENA"}}
+{"id":"udhar_014","category":"udhar","input":"Maine Kaif se Cash mein 250 PKR udhar liye.","expected_tool":"propose_udhar","expected_args":{"amount":250,"type":"DENA"}}
 {"id":"udhar_015","category":"udhar","input":"Kaif ko NayaPay se 5000 PKR udhar diya. Note advance.","expected_tool":"propose_udhar","expected_args":{"amount":5000,"type":"LENA"}}
 {"id":"udhar_016","category":"udhar","input":"Razaq se Cash mein 700 PKR udhar liye.","expected_tool":"propose_udhar","expected_args":{"amount":700,"type":"DENA"}}
 {"id":"clarify_017","category":"clarify","input":"Razaq ko paise diye","expected_behavior":"clarify","reply_keywords":["amount","kitna","account","udhar","settle"]}

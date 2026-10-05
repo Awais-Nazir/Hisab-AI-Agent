@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 
 CASES_PATH = Path(__file__).with_name("cases.jsonl")
 RESULTS_PATH = Path(__file__).with_name("last_run.json")
+RUNS_DIR = Path(__file__).with_name("runs")
 RUN_AGENT = None
 
 
@@ -234,20 +235,29 @@ def main() -> int:
         results.append(run_case(case))
 
     summary = summarize(results)
+    ran_at = datetime.now(ZoneInfo("Asia/Karachi"))
     output = {
-        "ran_at": datetime.now(ZoneInfo("Asia/Karachi")).isoformat(),
+        "ran_at": ran_at.isoformat(),
         "cases_path": str(CASES_PATH),
         "summary": summary,
         "results": results,
     }
+    timestamped_path = RUNS_DIR / f"run_{ran_at.strftime('%Y%m%d_%H%M%S')}.json"
+
+    RUNS_DIR.mkdir(exist_ok=True)
 
     RESULTS_PATH.write_text(
+        json.dumps(output, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    timestamped_path.write_text(
         json.dumps(output, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 
     print_scoreboard(summary, results)
     print(f"\nSaved results to {RESULTS_PATH}")
+    print(f"Saved timestamped results to {timestamped_path}")
 
     return 0 if summary["failed"] == 0 else 1
 
