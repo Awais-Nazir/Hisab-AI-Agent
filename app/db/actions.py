@@ -10,12 +10,14 @@ def create_pending_action(
     db: Session,
     action_id: str,
     session_id: str,
+    auth_key: str,
     action_type: str,
     proposal: dict[str, Any],
 ) -> PendingAction:
     action = PendingAction(
         id=action_id,
         session_id=session_id,
+        auth_key=auth_key,
         type=action_type,
         proposal=proposal,
         status="pending",
@@ -32,6 +34,7 @@ def get_pending_action(
     db: Session,
     action_id: str,
     session_id: str,
+    auth_key: str,
 ) -> PendingAction | None:
     return (
         db
@@ -39,6 +42,7 @@ def get_pending_action(
         .filter(
             PendingAction.id == action_id,
             PendingAction.session_id == session_id,
+            PendingAction.auth_key == auth_key,
         )
         .first()
     )
@@ -59,12 +63,14 @@ def update_action_status(
 def get_pending_action_for_session(
     db: Session,
     session_id: str,
+    auth_key: str,
 ) -> PendingAction | None:
     return (
         db
         .query(PendingAction)
         .filter(
             PendingAction.session_id == session_id,
+            PendingAction.auth_key == auth_key,
             PendingAction.status == "pending",
         )
         .order_by(PendingAction.created_at.desc())

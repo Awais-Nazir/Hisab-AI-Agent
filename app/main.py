@@ -1,3 +1,4 @@
+import hashlib
 import os
 import re
 
@@ -143,6 +144,7 @@ def require_agent_secret(
 def require_hisab_auth(
     authorization: str | None = Header(default=None, alias="Authorization"),
     cookie: str | None = Header(default=None, alias="Cookie"),
+    hisab_user_id: str | None = Header(default=None, alias="X-Hisab-User-Id"),
 ) -> dict:
     if not authorization and not cookie:
         raise HTTPException(
@@ -150,9 +152,15 @@ def require_hisab_auth(
             detail="Missing Hisab user auth.",
         )
 
+    if hisab_user_id:
+        auth_key_source = f"user:{hisab_user_id}"
+    else:
+        auth_key_source = authorization or cookie or ""
+
     return {
         "authorization": authorization,
         "cookie": cookie,
+        "auth_key": hashlib.sha256(auth_key_source.encode("utf-8")).hexdigest(),
     }
 
 
@@ -164,6 +172,13 @@ def tool_log_entries(tool_calls: list[dict]) -> list[dict]:
         }
         for tool_call in tool_calls
     ]
+
+
+def hisab_client_from_auth(hisab_auth: dict) -> HisabClient:
+    return HisabClient(
+        authorization=hisab_auth["authorization"],
+        cookie=hisab_auth["cookie"],
+    )
 
 
 @app.get("/")
@@ -191,9 +206,15 @@ def chat(
     db = SessionLocal()
 
     try:
+        auth_key = hisab_auth["auth_key"]
+
         # 1. Get existing session or create a new one.
         if request.session_id:
-            session = get_session(db, request.session_id)
+            session = get_session(
+                db=db,
+                session_id=request.session_id,
+                auth_key=auth_key,
+            )
 
             if not session:
                 raise HTTPException(
@@ -201,7 +222,10 @@ def chat(
                     detail="Session not found.",
                 )
         else:
-            session = create_session(db)
+            session = create_session(
+                db=db,
+                auth_key=auth_key,
+            )
 
         # 2. Load previous conversation.
         db_messages = get_session_messages(
@@ -213,19 +237,21 @@ def chat(
         pending_action = get_pending_action_for_session(
             db=db,
             session_id=session.id,
+            auth_key=auth_key,
         )
 
         if pending_action:
             pending_reply = classify_pending_action_reply(request.message)
 
             if pending_reply == "confirm":
-                hisab_client = HisabClient(**hisab_auth)
+                hisab_client = hisab_client_from_auth(hisab_auth)
 
                 try:
                     confirm_action(
                         db=db,
                         action_id=pending_action.id,
                         session_id=session.id,
+                        auth_key=auth_key,
                         client=hisab_client,
                     )
 
@@ -269,6 +295,7 @@ def chat(
                     db=db,
                     action_id=pending_action.id,
                     session_id=session.id,
+                    auth_key=auth_key,
                 )
 
                 reply = "Okay, I rejected that action."
@@ -327,7 +354,7 @@ def chat(
                 final_reply=reply,
             )
 
-            display_client = HisabClient(**hisab_auth)
+            display_client = hisab_client_from_auth(hisab_auth)
 
             try:
                 pending_action = pending_action_response(
@@ -361,6 +388,7 @@ def chat(
                         db=db,
                         action_id=proposal_result["action_id"],
                         session_id=session.id,
+                        auth_key=auth_key,
                         action_type=proposal_result["type"],
                         proposal=proposal_result["proposal"],
                     )
@@ -382,7 +410,7 @@ def chat(
         )
 
         # 5. Return the response.
-        display_client = HisabClient(**hisab_auth)
+        display_client = hisab_client_from_auth(hisab_auth)
 
         try:
             pending_action = pending_action_response(
@@ -415,13 +443,15 @@ def confirm_pending_action(
     db = SessionLocal()
 
     try:
-        hisab_client = HisabClient(**hisab_auth)
+        auth_key = hisab_auth["auth_key"]
+        hisab_client = hisab_client_from_auth(hisab_auth)
 
         try:
             result = confirm_action(
                 db=db,
                 action_id=action_id,
                 session_id=session_id,
+                auth_key=auth_key,
                 client=hisab_client,
             )
 
@@ -470,10 +500,12 @@ def reject_pending_action(
     db = SessionLocal()
 
     try:
+        auth_key = hisab_auth["auth_key"]
         result = reject_action(
             db=db,
             action_id=action_id,
             session_id=session_id,
+            auth_key=auth_key,
         )
         log_chat_run(
             session_id=session_id,

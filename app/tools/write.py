@@ -125,12 +125,14 @@ def confirm_action(
     db: DBSession,
     action_id: str,
     session_id: str,
+    auth_key: str,
     client,
 ):
     action = get_pending_action(
         db=db,
         action_id=action_id,
         session_id=session_id,
+        auth_key=auth_key,
     )
 
     if not action:
@@ -200,11 +202,13 @@ def reject_action(
     db: DBSession,
     action_id: str,
     session_id: str,
+    auth_key: str,
 ):
     action = get_pending_action(
         db=db,
         action_id=action_id,
         session_id=session_id,
+        auth_key=auth_key,
     )
 
     if not action:
