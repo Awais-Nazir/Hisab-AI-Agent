@@ -91,10 +91,22 @@ class HisabClient:
         data = self.list_categories()
 
         for category in data["categories"]:
-            if category["id"] == category_id:
+            if (
+                category["id"] == category_id
+                or category["name"].lower() == category_id.lower()
+            ):
                 return category["name"]
 
         raise ValueError(f"Category not found: {category_id}")
+
+    def get_account_name(self, account_id: str):
+        data = self.list_accounts()
+
+        for account in data["accounts"]:
+            if account["id"] == account_id:
+                return account["name"]
+
+        return account_id
 
     def write_expense(
         self,

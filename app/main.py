@@ -94,15 +94,33 @@ def classify_pending_action_reply(message: str) -> str | None:
     return None
 
 
-def pending_action_response(action):
+def pending_action_response(action, client: HisabClient | None = None):
     if not action:
         return None
+
+    proposal = dict(action.proposal)
+
+    if client and action.type == "expense":
+        category_id = proposal.get("category_id")
+        account_id = proposal.get("account_id")
+
+        if category_id:
+            try:
+                proposal["category_name"] = client.get_category_name(category_id)
+            except Exception:
+                proposal["category_name"] = category_id
+
+        if account_id:
+            try:
+                proposal["account_name"] = client.get_account_name(account_id)
+            except Exception:
+                proposal["account_name"] = account_id
 
     return {
         "action_id": action.id,
         "type": action.type,
         "status": action.status,
-        "proposal": action.proposal,
+        "proposal": proposal,
     }
 
 
@@ -309,10 +327,20 @@ def chat(
                 final_reply=reply,
             )
 
+            display_client = HisabClient(**hisab_auth)
+
+            try:
+                pending_action = pending_action_response(
+                    pending_action,
+                    client=display_client,
+                )
+            finally:
+                display_client.close()
+
             return ChatResponse(
                 session_id=session.id,
                 reply=reply,
-                pending_action=pending_action_response(pending_action),
+                pending_action=pending_action,
             )
 
         # 3. Run the agent.
@@ -354,10 +382,20 @@ def chat(
         )
 
         # 5. Return the response.
+        display_client = HisabClient(**hisab_auth)
+
+        try:
+            pending_action = pending_action_response(
+                pending_action,
+                client=display_client,
+            )
+        finally:
+            display_client.close()
+
         return ChatResponse(
             session_id=session.id,
             reply=result["reply"],
-            pending_action=pending_action_response(pending_action),
+            pending_action=pending_action,
         )
 
     finally:
