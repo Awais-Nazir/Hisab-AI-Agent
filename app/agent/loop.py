@@ -31,19 +31,6 @@ client = OpenAI()
 
 MAX_STEPS = 6
 
-TOOL_REGISTRY = {
-    "list_expenses": list_expenses,
-    "list_contacts": list_contacts,
-    "get_contact_balance": get_contact_balance,
-    "list_categories": list_categories,
-    "list_accounts": list_accounts,
-    "list_udhar": list_udhar,
-    "propose_udhar": propose_udhar,
-    "propose_expense": propose_expense,
-    "propose_settlement": propose_settlement,
-    "propose_udhar_settle": propose_udhar_settle,
-}
-
 SYSTEM_PROMPT = """You are the Hisab Kitab assistant. You help the user with their own
 expenses, balances, contacts and accounts. All amounts are in PKR.
 
@@ -95,7 +82,30 @@ Payment rules:
 """
 
 
-def run_agent(user_message: str, history: list | None = None) -> dict:
+def build_tool_registry(hisab_client: HisabClient) -> dict:
+    return {
+        "list_expenses": lambda: list_expenses(hisab_client),
+        "list_contacts": lambda: list_contacts(hisab_client),
+        "get_contact_balance": lambda contact_id: get_contact_balance(
+            hisab_client,
+            contact_id,
+        ),
+        "list_categories": lambda: list_categories(hisab_client),
+        "list_accounts": lambda: list_accounts(hisab_client),
+        "list_udhar": lambda: list_udhar(hisab_client),
+        "propose_udhar": propose_udhar,
+        "propose_expense": propose_expense,
+        "propose_settlement": propose_settlement,
+        "propose_udhar_settle": propose_udhar_settle,
+    }
+
+
+def run_agent(
+    user_message: str,
+    history: list | None = None,
+    hisab_authorization: str | None = None,
+    hisab_cookie: str | None = None,
+) -> dict:
     """
     Run the Hisab Kitab agent for one user message.
 
@@ -115,8 +125,17 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
         m for m in (history or []) if isinstance(m, dict) and m.get("role") != "system"
     ]
 
-    hisab_client = HisabClient()
-    hisab_client.login()
+    hisab_client = HisabClient(
+        authorization=hisab_authorization,
+        cookie=hisab_cookie,
+    )
+
+    # Local/eval fallback only. Production routes should pass the logged-in user's
+    # Hisab auth header instead of using the Render env account.
+    if not hisab_authorization and not hisab_cookie:
+        hisab_client.login()
+
+    tool_registry = build_tool_registry(hisab_client)
 
     now = datetime.now(ZoneInfo("Asia/Karachi"))
 
@@ -138,54 +157,75 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
 
     tool_calls = []
 
-    for _ in range(MAX_STEPS):
-        completion = client.chat.completions.create(
-            model=os.getenv("MODEL"),
-            messages=messages,
-            tools=tools,
-        )
+    try:
+        for _ in range(MAX_STEPS):
+            completion = client.chat.completions.create(
+                model=os.getenv("MODEL"),
+                messages=messages,
+                tools=tools,
+            )
 
-        message = completion.choices[0].message
-        message_dict = message.model_dump(exclude_none=True)
+            message = completion.choices[0].message
+            message_dict = message.model_dump(exclude_none=True)
 
-        messages.append(message_dict)
+            messages.append(message_dict)
 
-        if not message.tool_calls:
-            return {
-                "reply": message.content or "",
-                "tool_calls": tool_calls,
-                "messages": messages,
-                "new_messages_start": new_messages_start,
-            }
+            if not message.tool_calls:
+                return {
+                    "reply": message.content or "",
+                    "tool_calls": tool_calls,
+                    "messages": messages,
+                    "new_messages_start": new_messages_start,
+                }
 
-        for tool_call in message.tool_calls:
-            tool_name = tool_call.function.name
-            raw_arguments = tool_call.function.arguments
+            for tool_call in message.tool_calls:
+                tool_name = tool_call.function.name
+                raw_arguments = tool_call.function.arguments
 
-            try:
-                parsed_args = json.loads(raw_arguments)
+                try:
+                    parsed_args = json.loads(raw_arguments)
 
-            except json.JSONDecodeError:
-                result = {"error": "Invalid JSON arguments provided by the model."}
+                except json.JSONDecodeError:
+                    result = {"error": "Invalid JSON arguments provided by the model."}
 
-                tool_calls.append({
-                    "name": tool_name,
-                    "arguments": raw_arguments,
-                    "result": result,
-                })
+                    tool_calls.append({
+                        "name": tool_name,
+                        "arguments": raw_arguments,
+                        "result": result,
+                    })
 
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": json.dumps(result),
-                })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(result),
+                    })
 
-                continue
+                    continue
 
-            tool_function = TOOL_REGISTRY.get(tool_name)
+                tool_function = tool_registry.get(tool_name)
 
-            if not tool_function:
-                result = {"error": f"Unknown tool: {tool_name}"}
+                if not tool_function:
+                    result = {"error": f"Unknown tool: {tool_name}"}
+
+                    tool_calls.append({
+                        "name": tool_name,
+                        "arguments": parsed_args,
+                        "result": result,
+                    })
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(result),
+                    })
+
+                    continue
+
+                try:
+                    result = tool_function(**parsed_args)
+
+                except Exception as e:
+                    result = {"error": f"Tool '{tool_name}' failed: {str(e)}"}
 
                 tool_calls.append({
                     "name": tool_name,
@@ -199,25 +239,8 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
                     "content": json.dumps(result),
                 })
 
-                continue
-
-            try:
-                result = tool_function(**parsed_args)
-
-            except Exception as e:
-                result = {"error": f"Tool '{tool_name}' failed: {str(e)}"}
-
-            tool_calls.append({
-                "name": tool_name,
-                "arguments": parsed_args,
-                "result": result,
-            })
-
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": json.dumps(result),
-            })
+    finally:
+        hisab_client.close()
 
     return {
         "reply": (

@@ -122,6 +122,22 @@ def require_agent_secret(
         )
 
 
+def require_hisab_auth(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    cookie: str | None = Header(default=None, alias="Cookie"),
+) -> dict:
+    if not authorization and not cookie:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Hisab user auth.",
+        )
+
+    return {
+        "authorization": authorization,
+        "cookie": cookie,
+    }
+
+
 def tool_log_entries(tool_calls: list[dict]) -> list[dict]:
     return [
         {
@@ -150,7 +166,10 @@ def health():
     response_model=ChatResponse,
     dependencies=[Depends(require_agent_secret)],
 )
-def chat(request: ChatRequest):
+def chat(
+    request: ChatRequest,
+    hisab_auth: dict = Depends(require_hisab_auth),
+):
     db = SessionLocal()
 
     try:
@@ -182,11 +201,9 @@ def chat(request: ChatRequest):
             pending_reply = classify_pending_action_reply(request.message)
 
             if pending_reply == "confirm":
-                hisab_client = HisabClient()
+                hisab_client = HisabClient(**hisab_auth)
 
                 try:
-                    hisab_client.login()
-
                     confirm_action(
                         db=db,
                         action_id=pending_action.id,
@@ -302,6 +319,8 @@ def chat(request: ChatRequest):
         result = run_agent(
             user_message=request.message,
             history=history,
+            hisab_authorization=hisab_auth["authorization"],
+            hisab_cookie=hisab_auth["cookie"],
         )
         pending_action = None
 
@@ -353,19 +372,24 @@ def chat(request: ChatRequest):
 def confirm_pending_action(
     action_id: str,
     session_id: str,
+    hisab_auth: dict = Depends(require_hisab_auth),
 ):
     db = SessionLocal()
 
     try:
-        hisab_client = HisabClient()
-        hisab_client.login()
+        hisab_client = HisabClient(**hisab_auth)
 
-        result = confirm_action(
-            db=db,
-            action_id=action_id,
-            session_id=session_id,
-            client=hisab_client,
-        )
+        try:
+            result = confirm_action(
+                db=db,
+                action_id=action_id,
+                session_id=session_id,
+                client=hisab_client,
+            )
+
+        finally:
+            hisab_client.close()
+
         log_chat_run(
             session_id=session_id,
             user_message="[confirm endpoint]",
@@ -403,6 +427,7 @@ def confirm_pending_action(
 def reject_pending_action(
     action_id: str,
     session_id: str,
+    hisab_auth: dict = Depends(require_hisab_auth),
 ):
     db = SessionLocal()
 

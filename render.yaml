@@ -15,7 +15,3 @@ services:
         sync: false
       - key: API_BASE_URL
         sync: false
-      - key: EMAIL
-        sync: false
-      - key: PASS
-        sync: false

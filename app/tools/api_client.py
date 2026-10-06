@@ -10,11 +10,21 @@ BASE_URL = os.getenv("API_BASE_URL")
 
 
 class HisabClient:
-    def __init__(self):
+    def __init__(
+        self,
+        authorization: str | None = None,
+        cookie: str | None = None,
+    ):
         self.client = httpx.Client(
             base_url=BASE_URL,
             timeout=10.0,
         )
+
+        if authorization:
+            self.client.headers.update({"Authorization": authorization})
+
+        if cookie:
+            self.client.headers.update({"Cookie": cookie})
 
     def login(self):
         email = os.getenv("EMAIL")

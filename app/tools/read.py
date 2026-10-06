@@ -1,11 +1,7 @@
 from .api_client import HisabClient
 
 
-client = HisabClient()
-client.login()
-
-
-def list_expenses():
+def list_expenses(client: HisabClient):
     data = client.list_expenses()
 
     expenses = []
@@ -38,7 +34,7 @@ def list_expenses():
     }
 
 
-def list_contacts():
+def list_contacts(client: HisabClient):
     data = client.list_contacts()
 
     people = []
@@ -54,7 +50,7 @@ def list_contacts():
     }
 
 
-def get_contact_balance(contact_id):
+def get_contact_balance(client: HisabClient, contact_id):
     data = client.list_contact_balance(contact_id)
 
     balance = data.get("total", 0)
@@ -79,7 +75,7 @@ def get_contact_balance(contact_id):
     }
 
 
-def list_categories():
+def list_categories(client: HisabClient):
     data = client.list_categories()
 
     categories = []
@@ -95,7 +91,7 @@ def list_categories():
     }
 
 
-def list_accounts():
+def list_accounts(client: HisabClient):
     data = client.list_accounts()
 
     accounts = []
@@ -113,7 +109,7 @@ def list_accounts():
     }
 
 
-def list_udhar():
+def list_udhar(client: HisabClient):
     data = client.list_udhar()
 
     entries = []
