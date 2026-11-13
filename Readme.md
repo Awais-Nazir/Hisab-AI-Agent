@@ -1,8 +1,10 @@
 # Hisab AI Agent
 
-Hisab AI Agent is the conversational backend for the Hisab Kitab app. It lets a user ask questions about expenses, accounts, balances, contacts, settlements, and udhar in natural language, including Roman Urdu. The important safety idea is the propose-confirm flow: the model can prepare a pending action, but it does not directly write money-moving data. A write is only executed after the user confirms through the UI button or through a deterministic confirm phrase handled by the FastAPI route before the model is called again.
+Hisab AI Agent is the conversational backend for [Hisab Kitab](https://github.com/Awais-Nazir/hisab-kitab-ag). A user can ask about expenses, accounts, balances, contacts, settlements and udhar in plain language, including Roman Urdu.
 
-[Live demo](https://hisab.awaisnazir.tech/chat)  
+The safety idea is the propose-confirm flow. The model can prepare a pending action, but it never writes money-moving data directly. A write runs only after the user confirms, either with the UI button or with a fixed confirm phrase that the FastAPI route handles before the model is called again.
+
+[Live demo](https://hisab.awaisnazir.tech/chat) (sign in to Hisab Kitab first)  
 FastAPI health check: [hisab-ai-agent.onrender.com/health](https://hisab-ai-agent.onrender.com/health)
 
 ![Live chat proposal flow](docs/live-chat.png)
@@ -24,7 +26,7 @@ flowchart LR
 
 The browser never calls the Render agent directly. The Next.js API route forwards the logged-in user's Hisab auth/cookie and the private `X-Agent-Secret` header to FastAPI. FastAPI then calls the Hisab Kitab API as that user, while storing only agent-side session state, message history, and pending action metadata in its own database.
 
-## What The Agent Does
+## What the agent does
 
 The agent can:
 
@@ -39,7 +41,7 @@ The agent can:
 
 The agent is deliberately conservative around writes. It asks for missing account/contact details, refuses unrelated questions, and keeps shared-expense balance separate from udhar.
 
-## Safety Design
+## Safety design
 
 The core rule is simple: the model proposes, plain backend code confirms.
 
@@ -55,7 +57,7 @@ The confirm/reject phrase check runs before the message reaches the model. That 
 
 User isolation is handled with an `auth_key` on both sessions and pending actions. The key is derived from `X-Hisab-User-Id` when available, otherwise from the forwarded auth/cookie. A user cannot fetch or confirm another user's pending action just by passing an old `session_id` or `action_id`.
 
-## API Contract
+## API contract
 
 All protected endpoints require:
 
@@ -104,7 +106,7 @@ Response:
 }
 ```
 
-### Confirm Or Reject
+### Confirm or reject
 
 ```http
 POST /actions/{action_id}/confirm?session_id={session_id}
@@ -158,7 +160,9 @@ Final run by category:
 
 The main fixes between the two runs were clearer udhar direction rules, stricter unknown-contact handling, required split details for shared expenses, and better preservation of the user's item or meal description.
 
-## Local Setup
+I tuned the prompts and validation against these same 20 cases, so 100% is a regression check, not an accuracy estimate. A held-out set would tell more.
+
+## Local setup
 
 Create a virtual environment and install dependencies:
 
@@ -228,6 +232,6 @@ Required Render environment variables:
 
 The public Render URL should only expose health/root checks directly. Real agent traffic should come through the Next.js backend route with `X-Agent-Secret` attached server-side.
 
-## Known Next Step
+## Known next step
 
 The main remaining production guardrail is a per-user daily message cap, for example 20 `/chat` messages per user per day. That should be checked before calling OpenAI so a public deployment cannot accidentally burn through credits.
